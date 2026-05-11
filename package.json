@@ -1,0 +1,24 @@
+{
+  "name": "legion-aiqa",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Anastasiya-O/legion-aiqa.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Anastasiya-O/legion-aiqa/issues"
+  },
+  "homepage": "https://github.com/Anastasiya-O/legion-aiqa#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
+  }
+}
