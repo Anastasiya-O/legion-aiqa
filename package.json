@@ -20,5 +20,8 @@
   "homepage": "https://github.com/Anastasiya-O/legion-aiqa#readme",
   "devDependencies": {
     "@playwright/test": "^1.59.1"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
   }
 }

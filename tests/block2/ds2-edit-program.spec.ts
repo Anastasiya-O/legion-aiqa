@@ -1,0 +1,142 @@
+import { expect, test } from '@playwright/test';
+import {
+  assertDidaxisEnv,
+  createProgram,
+  login,
+  openEditProgramDialog,
+  programRow,
+  uniqueProgramName,
+} from './fixtures';
+
+test.beforeAll(assertDidaxisEnv);
+
+test.beforeEach(async ({ page }) => {
+  await login(page);
+});
+
+test.describe('Block 2 — DS-2 Program editing', () => {
+  test('TC-001 Edit form shows current program data', async ({ page }) => {
+    const name = uniqueProgramName('Web Development 2026');
+    await createProgram(page, name, 'Original description');
+    const dialog = await openEditProgramDialog(page, name);
+    await expect(dialog.getByLabel('Program Name')).toHaveValue(name);
+    await expect(dialog.getByLabel('Description')).toHaveValue('Original description');
+  });
+
+  test('TC-002 Rename saves and updates list immediately', async ({ page }) => {
+    const name = uniqueProgramName('Web Development 2026');
+    await createProgram(page, name, 'Desc');
+    const dialog = await openEditProgramDialog(page, name);
+    const updated = `${name} - Updated`;
+    await dialog.getByLabel('Program Name').fill(updated);
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(dialog).toBeHidden({ timeout: 15_000 });
+    await expect(programRow(page, updated)).toBeVisible();
+  });
+
+  test('TC-003 Unchanged fields are preserved', async ({ page }) => {
+    const name = uniqueProgramName('MultiField');
+    const originalDesc = 'Original body';
+    await createProgram(page, name, originalDesc);
+    const dialog = await openEditProgramDialog(page, name);
+    await dialog.getByLabel('Description').fill('Only description changed');
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(dialog).toBeHidden({ timeout: 15_000 });
+    const reopen = await openEditProgramDialog(page, name);
+    await expect(reopen.getByLabel('Program Name')).toHaveValue(name);
+    await expect(reopen.getByLabel('Description')).toHaveValue('Only description changed');
+  });
+
+  test('TC-101 Empty Name cannot be saved', async ({ page }) => {
+    const name = uniqueProgramName('EmptyName');
+    await createProgram(page, name, 'x');
+    const dialog = await openEditProgramDialog(page, name);
+    await dialog.getByLabel('Program Name').fill('');
+    await expect(dialog.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await expect(dialog).toBeVisible();
+    await expect(programRow(page, name)).toBeVisible();
+  });
+
+  test('TC-102 Save failure does not close modal', async ({ page }) => {
+    const name = uniqueProgramName('SaveFail');
+    await createProgram(page, name, 'x');
+    const dialog = await openEditProgramDialog(page, name);
+    try {
+      await page.route('**/*', (route) => {
+        const req = route.request();
+        if (req.method() !== 'GET' && req.url().toLowerCase().includes('program')) {
+          return route.abort('failed');
+        }
+        return route.continue();
+      });
+      await dialog.getByLabel('Program Name').fill(`${name}-patched`);
+      await dialog.getByRole('button', { name: 'Save' }).click();
+      await expect(dialog).toBeVisible({ timeout: 10_000 });
+    } finally {
+      await page.unroute('**/*');
+    }
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(programRow(page, name)).toBeVisible();
+  });
+
+  test('TC-103 Duplicate program name handling is enforced', async ({ page }) => {
+    const a = uniqueProgramName('ProgA');
+    const b = uniqueProgramName('ProgB');
+    await createProgram(page, a, 'da');
+    await createProgram(page, b, 'db');
+    const dialog = await openEditProgramDialog(page, b);
+    await dialog.getByLabel('Program Name').fill(a);
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    const stillOpen = await dialog.isVisible().catch(() => false);
+    const alert = page.getByRole('alert');
+    const hasAlert = await alert.isVisible().catch(() => false);
+    expect(stillOpen || hasAlert).toBeTruthy();
+    await expect(programRow(page, b)).toBeVisible();
+  });
+
+  test('TC-201 Name at max length saves', async ({ page }) => {
+    const tail = String(Date.now());
+    const maxName = (`E${'z'.repeat(120)}${tail}`).slice(0, 100);
+    const name = uniqueProgramName('MaxEdit');
+    await createProgram(page, name, 'd');
+    const dialog = await openEditProgramDialog(page, name);
+    await dialog.getByLabel('Program Name').fill(maxName);
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(dialog).toBeHidden({ timeout: 15_000 });
+    await expect(programRow(page, maxName)).toBeVisible();
+  });
+
+  test('TC-202 Name above max length is rejected or limited', async ({ page }) => {
+    const tail = String(Date.now());
+    const base = (`F${'w'.repeat(120)}${tail}`).slice(0, 100);
+    const tooLong = `${base}Z`;
+    const name = uniqueProgramName('OverEdit');
+    await createProgram(page, name, 'd');
+    const dialog = await openEditProgramDialog(page, name);
+    await dialog.getByLabel('Program Name').fill(tooLong);
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    const stillOpen = await dialog.isVisible().catch(() => false);
+    expect(stillOpen).toBeTruthy();
+  });
+
+  test('TC-203 Special characters are preserved', async ({ page }) => {
+    const name = uniqueProgramName('SpecEdit');
+    await createProgram(page, name, 'd');
+    const special = `${name.slice(0, 20)} — "Beta" <cohort>`;
+    const dialog = await openEditProgramDialog(page, name);
+    await dialog.getByLabel('Program Name').fill(special);
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(dialog).toBeHidden({ timeout: 15_000 });
+    await expect(programRow(page, special)).toBeVisible();
+  });
+
+  test('TC-204 Whitespace-only or trimmed names handled consistently', async ({ page }) => {
+    const core = uniqueProgramName('TrimEdit');
+    await createProgram(page, core, 'd');
+    const dialog = await openEditProgramDialog(page, core);
+    await dialog.getByLabel('Program Name').fill(`  ${core}  `);
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(dialog).toBeHidden({ timeout: 15_000 });
+    await expect(programRow(page, core)).toBeVisible();
+  });
+});
