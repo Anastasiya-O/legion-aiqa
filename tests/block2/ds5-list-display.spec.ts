@@ -1,11 +1,13 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, trackProgram } from '../../fixtures/cleanup.fixture';
 import {
   assertDidaxisEnv,
-  createProgram,
+  createAndTrackProgram,
   login,
   openNewProgramDialog,
   programRow,
   uniqueProgramName,
+  uuidFromProgramCreateResponse,
+  waitForProgramCreate,
 } from './fixtures';
 
 test.beforeAll(assertDidaxisEnv);
@@ -20,8 +22,8 @@ test.describe('Block 2 — DS-5 Program list (filtering N/A on current UI)', () 
   }) => {
     const n1 = uniqueProgramName('Cardiology Care');
     const n2 = uniqueProgramName('Pediatrics Plus');
-    await createProgram(page, n1, 'Heart health management');
-    await createProgram(page, n2, 'Child wellness and preventive care');
+    await createAndTrackProgram(page, n1, 'Heart health management');
+    await createAndTrackProgram(page, n2, 'Child wellness and preventive care');
     await page.goto('/programs');
     await expect(programRow(page, n1)).toBeVisible();
     await expect(programRow(page, n2)).toBeVisible();
@@ -41,7 +43,7 @@ test.describe('Block 2 — DS-5 Program list (filtering N/A on current UI)', () 
     page,
   }) => {
     const name = uniqueProgramName('Oncology Core');
-    await createProgram(page, name, 'Cancer treatment coordination');
+    await createAndTrackProgram(page, name, 'Cancer treatment coordination');
     await page.goto('/programs');
     await expect(page.getByRole('table')).toBeVisible();
     await expect(page.getByRole('button', { name: '+ New Program' })).toBeVisible();
@@ -54,7 +56,7 @@ test.describe('Block 2 — DS-5 Program list (filtering N/A on current UI)', () 
 
   test('TC-006 Program row shows name and description columns for scoped feature', async ({ page }) => {
     const name = uniqueProgramName('MetaProg');
-    await createProgram(page, name, 'Visible description only');
+    await createAndTrackProgram(page, name, 'Visible description only');
     await page.goto('/programs');
     const row = programRow(page, name);
     await expect(row.locator('p').first()).toHaveText(name);
@@ -63,14 +65,14 @@ test.describe('Block 2 — DS-5 Program list (filtering N/A on current UI)', () 
 
   test('TC-007 Program with empty description still renders name', async ({ page }) => {
     const name = uniqueProgramName('General Medicine');
-    await createProgram(page, name, '');
+    await createAndTrackProgram(page, name, '');
     await page.goto('/programs');
     await expect(programRow(page, name)).toBeVisible();
   });
 
   test('TC-008 Program names with special characters render safely', async ({ page }) => {
     const name = uniqueProgramName("Women's Health & Wellness");
-    await createProgram(page, name, 'Comprehensive care');
+    await createAndTrackProgram(page, name, 'Comprehensive care');
     let dialogSeen = false;
     page.once('dialog', () => {
       dialogSeen = true;
@@ -84,15 +86,20 @@ test.describe('Block 2 — DS-5 Program list (filtering N/A on current UI)', () 
     page,
   }) => {
     const name = uniqueProgramName('Nutrition Track');
-    await createProgram(page, name, 'Adult program');
+    await createAndTrackProgram(page, name, 'Adult program');
     const dialog = await openNewProgramDialog(page);
     await dialog.getByLabel('Program Name').fill(name);
     await dialog.getByLabel('Description').fill('Pediatric program');
+    const createResponse = waitForProgramCreate(page).catch(() => null);
     await dialog.getByRole('button', { name: 'Create' }).click();
     const stillOpen = await dialog.isVisible().catch(() => false);
     if (stillOpen) {
       test.skip(true, 'Application rejected duplicate program name; cannot assert two rows.');
       return;
+    }
+    const response = await createResponse;
+    if (response) {
+      trackProgram(await uuidFromProgramCreateResponse(response));
     }
     await expect(page.locator('tbody tr').filter({ has: page.getByText(name, { exact: true }) })).toHaveCount(2);
     await expect(programRow(page, name).getByText('Adult program').first()).toBeVisible();
@@ -103,7 +110,7 @@ test.describe('Block 2 — DS-5 Program list (filtering N/A on current UI)', () 
     const tail = String(Date.now());
     const longName = (`R${'t'.repeat(120)}${tail}`).slice(0, 100);
     const longDesc = 'L'.repeat(2000);
-    await createProgram(page, longName, longDesc);
+    await createAndTrackProgram(page, longName, longDesc);
     await page.goto('/programs');
     const row = programRow(page, longName);
     await expect(row).toBeVisible();

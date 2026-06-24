@@ -1,11 +1,14 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, trackProgram } from '../../fixtures/cleanup.fixture';
 import {
   assertDidaxisEnv,
-  createProgram,
+  clickCreateInDialog,
+  createAndTrackProgram,
   login,
   openNewProgramDialog,
   programRow,
   uniqueProgramName,
+  uuidFromProgramCreateResponse,
+  waitForProgramCreate,
 } from './fixtures';
 
 test.beforeAll(assertDidaxisEnv);
@@ -28,7 +31,7 @@ test.describe('Block 2 — DS-1 Create New Academic Program', () => {
   test('TC-002 Program is successfully created with valid name and description', async ({ page }) => {
     const name = uniqueProgramName('Web Development 2026');
     const desc = 'Full-stack web development program';
-    await createProgram(page, name, desc);
+    await createAndTrackProgram(page, name, desc);
     await expect(programRow(page, name)).toBeVisible();
     await expect(programRow(page, name).getByText(desc)).toBeVisible();
   });
@@ -37,7 +40,7 @@ test.describe('Block 2 — DS-1 Create New Academic Program', () => {
     page,
   }) => {
     const name = uniqueProgramName('Data Analytics 2026');
-    await createProgram(page, name, '');
+    await createAndTrackProgram(page, name, '');
     await expect(programRow(page, name)).toBeVisible();
   });
 
@@ -56,7 +59,7 @@ test.describe('Block 2 — DS-1 Create New Academic Program', () => {
 
   test('TC-006 Duplicate program name is not created twice', async ({ page }) => {
     const name = uniqueProgramName('Web Development 2026');
-    await createProgram(page, name, 'first');
+    await createAndTrackProgram(page, name, 'first');
     const dialog = await openNewProgramDialog(page);
     await dialog.getByLabel('Program Name').fill(name);
     await dialog.getByLabel('Description').fill('Duplicate program test');
@@ -97,14 +100,14 @@ test.describe('Block 2 — DS-1 Create New Academic Program', () => {
   }) => {
     const trimmed = uniqueProgramName('Cybersecurity 2026');
     const padded = `  ${trimmed}  `;
-    await createProgram(page, padded, 'Security fundamentals');
+    await createAndTrackProgram(page, padded, 'Security fundamentals');
     await expect(programRow(page, trimmed)).toBeVisible();
   });
 
   test('TC-009 Program name supports valid special characters', async ({ page }) => {
     const name = uniqueProgramName('AI & Machine Learning: 2026');
     const desc = 'Artificial intelligence, ML, and applied data science';
-    await createProgram(page, name, desc);
+    await createAndTrackProgram(page, name, desc);
     await expect(programRow(page, name)).toBeVisible();
   });
 
@@ -114,7 +117,7 @@ test.describe('Block 2 — DS-1 Create New Academic Program', () => {
     page.once('dialog', () => {
       dialogOpened = true;
     });
-    await createProgram(page, name, 'Security validation test');
+    await createAndTrackProgram(page, name, 'Security validation test');
     expect(dialogOpened).toBe(false);
     await expect(programRow(page, name)).toBeVisible();
   });
@@ -126,8 +129,7 @@ test.describe('Block 2 — DS-1 Create New Academic Program', () => {
     await dialog.getByLabel('Description').fill('Minimum length name test');
     const createBtn = dialog.getByRole('button', { name: 'Create' });
     if (await createBtn.isEnabled()) {
-      await createBtn.click();
-      await expect(page.getByRole('dialog', { name: 'New Program' })).toBeHidden({ timeout: 15_000 });
+      trackProgram(await clickCreateInDialog(page, dialog));
       await expect(programRow(page, name)).toBeVisible();
     } else {
       await expect(createBtn).toBeDisabled();
@@ -138,7 +140,7 @@ test.describe('Block 2 — DS-1 Create New Academic Program', () => {
     const tail = String(Date.now());
     const maxName = (`P${'x'.repeat(120)}${tail}`).slice(0, 100);
     expect(maxName.length).toBe(100);
-    await createProgram(page, maxName, 'Maximum valid length test');
+    await createAndTrackProgram(page, maxName, 'Maximum valid length test');
     await expect(programRow(page, maxName)).toBeVisible();
   });
 
@@ -162,7 +164,7 @@ test.describe('Block 2 — DS-1 Create New Academic Program', () => {
   test('TC-014 Description at maximum allowed length is handled correctly', async ({ page }) => {
     const name = uniqueProgramName('Software Engineering 2026');
     const desc = 'D'.repeat(2000);
-    await createProgram(page, name, desc);
+    await createAndTrackProgram(page, name, desc);
     await expect(programRow(page, name)).toBeVisible();
   });
 

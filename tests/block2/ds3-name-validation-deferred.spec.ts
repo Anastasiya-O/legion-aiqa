@@ -1,4 +1,4 @@
-import { test } from '@playwright/test';
+import { test } from '../../fixtures/cleanup.fixture';
 
 /**
  * DS-3 (block2/DS-3/block2_output.md) assumes additional required fields on Create Program:

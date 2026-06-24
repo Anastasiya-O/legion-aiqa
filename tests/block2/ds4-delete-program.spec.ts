@@ -1,13 +1,16 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, trackProgram } from '../../fixtures/cleanup.fixture';
 import {
   acceptNextDialog,
   assertDidaxisEnv,
-  createProgram,
+  createAndTrackProgram,
+  deleteButton,
   dismissNextDialog,
   login,
   openNewProgramDialog,
   programRow,
   uniqueProgramName,
+  uuidFromProgramCreateResponse,
+  waitForProgramCreate,
 } from './fixtures';
 
 test.beforeAll(assertDidaxisEnv);
@@ -19,10 +22,10 @@ test.beforeEach(async ({ page }) => {
 test.describe('Block 2 — DS-4 Delete program (browser confirm)', () => {
   test('TC-001 Program is removed after deletion is confirmed', async ({ page }) => {
     const name = uniqueProgramName('Test Program');
-    await createProgram(page, name, 'row');
+    await createAndTrackProgram(page, name, 'row');
     const row = programRow(page, name);
     const confirmPromise = acceptNextDialog(page);
-    await row.getByRole('button', { name: '🗑' }).click();
+    await deleteButton(row).click();
     await confirmPromise;
     await expect(programRow(page, name)).toHaveCount(0);
   });
@@ -31,10 +34,10 @@ test.describe('Block 2 — DS-4 Delete program (browser confirm)', () => {
     page,
   }) => {
     const name = uniqueProgramName('Test Program');
-    await createProgram(page, name, 'row');
+    await createAndTrackProgram(page, name, 'row');
     const row = programRow(page, name);
     const dismissPromise = dismissNextDialog(page);
-    await row.getByRole('button', { name: '🗑' }).click();
+    await deleteButton(row).click();
     await dismissPromise;
     await expect(programRow(page, name)).toBeVisible();
   });
@@ -42,10 +45,10 @@ test.describe('Block 2 — DS-4 Delete program (browser confirm)', () => {
   test('TC-003 Confirmation dialog content reflects the selected program', async ({ page }) => {
     const alpha = uniqueProgramName('Alpha Program');
     const testProg = uniqueProgramName('Test Program');
-    await createProgram(page, alpha, 'a');
-    await createProgram(page, testProg, 'b');
+    await createAndTrackProgram(page, alpha, 'a');
+    await createAndTrackProgram(page, testProg, 'b');
     const dismissPromise = dismissNextDialog(page);
-    await programRow(page, testProg).getByRole('button', { name: '🗑' }).click();
+    await deleteButton(programRow(page, testProg)).click();
     const msg = await dismissPromise;
     expect(msg).toContain(testProg);
     expect(msg).not.toContain(alpha);
@@ -53,27 +56,27 @@ test.describe('Block 2 — DS-4 Delete program (browser confirm)', () => {
 
   test('TC-004 Program is not deleted before explicit confirmation', async ({ page }) => {
     const name = uniqueProgramName('Test Program');
-    await createProgram(page, name, 'row');
+    await createAndTrackProgram(page, name, 'row');
     const row = programRow(page, name);
     const dismissPromise = dismissNextDialog(page);
-    await row.getByRole('button', { name: '🗑' }).click();
+    await deleteButton(row).click();
     await dismissPromise;
     await expect(programRow(page, name)).toBeVisible();
   });
 
   test('TC-005 Confirming delete removes exactly one program (native confirm)', async ({ page }) => {
     const name = uniqueProgramName('Test Program');
-    await createProgram(page, name, 'row');
+    await createAndTrackProgram(page, name, 'row');
     const row = programRow(page, name);
     const confirmPromise = acceptNextDialog(page);
-    await row.getByRole('button', { name: '🗑' }).click();
+    await deleteButton(row).click();
     await confirmPromise;
     await expect(programRow(page, name)).toHaveCount(0);
   });
 
   test('TC-006 Deletion failure does not remove program from list', async ({ page }) => {
     const name = uniqueProgramName('Test Program');
-    await createProgram(page, name, 'row');
+    await createAndTrackProgram(page, name, 'row');
     try {
       await page.route('**/*', (route) => {
         const req = route.request();
@@ -84,7 +87,7 @@ test.describe('Block 2 — DS-4 Delete program (browser confirm)', () => {
       });
       const row = programRow(page, name);
       const confirmPromise = acceptNextDialog(page);
-      await row.getByRole('button', { name: '🗑' }).click();
+      await deleteButton(row).click();
       await confirmPromise;
       await expect(programRow(page, name)).toBeVisible();
     } finally {
@@ -95,10 +98,10 @@ test.describe('Block 2 — DS-4 Delete program (browser confirm)', () => {
   test('TC-007 Wrong program must not be deleted when confirming another row', async ({ page }) => {
     const p1 = uniqueProgramName('Test Program');
     const p2 = uniqueProgramName('Test Program 2');
-    await createProgram(page, p1, 'a');
-    await createProgram(page, p2, 'b');
+    await createAndTrackProgram(page, p1, 'a');
+    await createAndTrackProgram(page, p2, 'b');
     const confirmPromise = acceptNextDialog(page);
-    await programRow(page, p2).getByRole('button', { name: '🗑' }).click();
+    await deleteButton(programRow(page, p2)).click();
     await confirmPromise;
     await expect(programRow(page, p2)).toHaveCount(0);
     await expect(programRow(page, p1)).toBeVisible();
@@ -106,19 +109,24 @@ test.describe('Block 2 — DS-4 Delete program (browser confirm)', () => {
 
   test('TC-008 Deletion works when duplicate program names exist', async ({ page }) => {
     const dup = uniqueProgramName('Test Program');
-    await createProgram(page, dup, 'first');
+    await createAndTrackProgram(page, dup, 'first');
     const dialog = await openNewProgramDialog(page);
     await dialog.getByLabel('Program Name').fill(dup);
     await dialog.getByLabel('Description').fill('second');
+    const createResponse = waitForProgramCreate(page).catch(() => null);
     await dialog.getByRole('button', { name: 'Create' }).click();
     if (await dialog.isVisible().catch(() => false)) {
       test.skip(true, 'App rejects duplicate program names; cannot test two same-name rows.');
       return;
     }
+    const response = await createResponse;
+    if (response) {
+      trackProgram(await uuidFromProgramCreateResponse(response));
+    }
     const rows = page.locator('tbody tr').filter({ has: page.getByText(dup, { exact: true }) });
     await expect(rows).toHaveCount(2);
     const confirmPromise = acceptNextDialog(page);
-    await rows.first().getByRole('button', { name: '🗑' }).click();
+    await deleteButton(rows.first()).click();
     await confirmPromise;
     await expect(rows).toHaveCount(1);
   });
@@ -127,9 +135,9 @@ test.describe('Block 2 — DS-4 Delete program (browser confirm)', () => {
     page,
   }) => {
     const name = uniqueProgramName(`QA_Program !@#$%^&*()[]{}-+=,./?`);
-    await createProgram(page, name, 'meta');
+    await createAndTrackProgram(page, name, 'meta');
     const confirmPromise = acceptNextDialog(page);
-    await programRow(page, name).getByRole('button', { name: '🗑' }).click();
+    await deleteButton(programRow(page, name)).click();
     await confirmPromise;
     await expect(programRow(page, name)).toHaveCount(0);
   });
@@ -137,9 +145,9 @@ test.describe('Block 2 — DS-4 Delete program (browser confirm)', () => {
   test('TC-010 Program with maximum allowed name length can be deleted', async ({ page }) => {
     const tail = String(Date.now());
     const longName = (`D${'q'.repeat(120)}${tail}`).slice(0, 100);
-    await createProgram(page, longName, 'max');
+    await createAndTrackProgram(page, longName, 'max');
     const confirmPromise = acceptNextDialog(page);
-    await programRow(page, longName).getByRole('button', { name: '🗑' }).click();
+    await deleteButton(programRow(page, longName)).click();
     await confirmPromise;
     await expect(programRow(page, longName)).toHaveCount(0);
   });
@@ -149,12 +157,12 @@ test.describe('Block 2 — DS-4 Delete program (browser confirm)', () => {
   }) => {
     const dup = uniqueProgramName('Test Program');
     const spec = uniqueProgramName('QA_Prog !@#');
-    await createProgram(page, dup, 'a');
-    await createProgram(page, dup, 'b');
-    await createProgram(page, spec, 'c');
+    await createAndTrackProgram(page, dup, 'a');
+    await createAndTrackProgram(page, dup, 'b');
+    await createAndTrackProgram(page, spec, 'c');
     for (const target of [dup, spec]) {
       const dismissPromise = dismissNextDialog(page);
-      await programRow(page, target).first().getByRole('button', { name: '🗑' }).click();
+      await deleteButton(programRow(page, target).first()).click();
       await dismissPromise;
     }
     await expect(page.locator('tbody tr').filter({ has: page.getByText(dup, { exact: true }) })).toHaveCount(2);

@@ -1,7 +1,7 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../../fixtures/cleanup.fixture';
 import {
   assertDidaxisEnv,
-  createProgram,
+  createAndTrackProgram,
   login,
   openEditProgramDialog,
   programRow,
@@ -22,7 +22,7 @@ test.beforeEach(async ({ page }) => {
 test.describe('Block 2 — DS-2 Program editing', () => {
   test('TC-001 Edit form shows current program data', async ({ page }) => {
     const name = uniqueProgramName('Web Development 2026');
-    await createProgram(page, name, 'Original description');
+    await createAndTrackProgram(page, name, 'Original description');
     const dialog = await openEditProgramDialog(page, name);
     await expect(page).toHaveURL(/\/programs/);
     await expect(dialog.getByLabel('Program Name')).toHaveValue(name);
@@ -31,7 +31,7 @@ test.describe('Block 2 — DS-2 Program editing', () => {
 
   test('TC-002 Rename saves and updates list immediately', async ({ page }) => {
     const name = uniqueProgramName('Web Development 2026');
-    await createProgram(page, name, 'Desc');
+    await createAndTrackProgram(page, name, 'Desc');
     const dialog = await openEditProgramDialog(page, name);
     const updated = `${name} - Updated`;
     await dialog.getByLabel('Program Name').fill(updated);
@@ -45,7 +45,7 @@ test.describe('Block 2 — DS-2 Program editing', () => {
     const name = uniqueProgramName('Web Development 2026');
     const originalDesc = 'Original body';
     const newDesc = 'Only description changed';
-    await createProgram(page, name, originalDesc);
+    await createAndTrackProgram(page, name, originalDesc);
     const dialog = await openEditProgramDialog(page, name);
     await dialog.getByLabel('Description').fill(newDesc);
     await dialog.getByRole('button', { name: 'Save' }).click();
@@ -58,7 +58,7 @@ test.describe('Block 2 — DS-2 Program editing', () => {
 
   test('TC-101 Empty Name cannot be saved', async ({ page }) => {
     const name = uniqueProgramName('EmptyName');
-    await createProgram(page, name, 'x');
+    await createAndTrackProgram(page, name, 'x');
     const dialog = await openEditProgramDialog(page, name);
     await dialog.getByLabel('Program Name').fill('');
     const saveBtn = dialog.getByRole('button', { name: 'Save' });
@@ -74,7 +74,7 @@ test.describe('Block 2 — DS-2 Program editing', () => {
   test('TC-102 Save failure does not close modal', async ({ page }) => {
     const name = uniqueProgramName('SaveFail');
     const patched = `${name}-patched`;
-    await createProgram(page, name, 'x');
+    await createAndTrackProgram(page, name, 'x');
     const dialog = await openEditProgramDialog(page, name);
     try {
       await page.route('**/*', (route) => {
@@ -103,8 +103,8 @@ test.describe('Block 2 — DS-2 Program editing', () => {
   test('TC-103 Duplicate program name handling is enforced', async ({ page }) => {
     const a = uniqueProgramName('ProgA');
     const b = uniqueProgramName('ProgB');
-    await createProgram(page, a, 'da');
-    await createProgram(page, b, 'db');
+    await createAndTrackProgram(page, a, 'da');
+    await createAndTrackProgram(page, b, 'db');
     const dialog = await openEditProgramDialog(page, b);
     await dialog.getByLabel('Program Name').fill(a);
     await dialog.getByRole('button', { name: 'Save' }).click();
@@ -123,7 +123,7 @@ test.describe('Block 2 — DS-2 Program editing', () => {
     const maxName = (`E${'z'.repeat(120)}${tail}`).slice(0, MAX_PROGRAM_NAME_LENGTH);
     expect(maxName).toHaveLength(MAX_PROGRAM_NAME_LENGTH);
     const name = uniqueProgramName('MaxEdit');
-    await createProgram(page, name, 'd');
+    await createAndTrackProgram(page, name, 'd');
     const dialog = await openEditProgramDialog(page, name);
     await dialog.getByLabel('Program Name').fill(maxName);
     await dialog.getByRole('button', { name: 'Save' }).click();
@@ -139,7 +139,7 @@ test.describe('Block 2 — DS-2 Program editing', () => {
     const tooLong = `${base}Z`;
     const truncated = tooLong.slice(0, MAX_PROGRAM_NAME_LENGTH);
     const name = uniqueProgramName('OverEdit');
-    await createProgram(page, name, 'd');
+    await createAndTrackProgram(page, name, 'd');
     const dialog = await openEditProgramDialog(page, name);
     await dialog.getByLabel('Program Name').fill(tooLong);
     await dialog.getByRole('button', { name: 'Save' }).click();
@@ -157,7 +157,7 @@ test.describe('Block 2 — DS-2 Program editing', () => {
 
   test('TC-203 Special characters are preserved', async ({ page }) => {
     const name = uniqueProgramName('SpecEdit');
-    await createProgram(page, name, 'd');
+    await createAndTrackProgram(page, name, 'd');
     const special = uniqueProgramName('Web Development 2026 — "Beta" <cohort>');
     const dialog = await openEditProgramDialog(page, name);
     await dialog.getByLabel('Program Name').fill(special);
@@ -170,7 +170,7 @@ test.describe('Block 2 — DS-2 Program editing', () => {
 
   test('TC-204 Whitespace-only or trimmed names handled consistently', async ({ page }) => {
     const core = uniqueProgramName('TrimEdit');
-    await createProgram(page, core, 'd');
+    await createAndTrackProgram(page, core, 'd');
     const dialog = await openEditProgramDialog(page, core);
     await dialog.getByLabel('Program Name').fill(`  ${core}  `);
     await dialog.getByRole('button', { name: 'Save' }).click();
@@ -181,7 +181,7 @@ test.describe('Block 2 — DS-2 Program editing', () => {
     ).toHaveCount(0);
 
     const spacesOnly = uniqueProgramName('SpacesOnly');
-    await createProgram(page, spacesOnly, 'd');
+    await createAndTrackProgram(page, spacesOnly, 'd');
     const dialogSpaces = await openEditProgramDialog(page, spacesOnly);
     await dialogSpaces.getByLabel('Program Name').fill('   ');
     await expect(dialogSpaces.getByRole('button', { name: 'Save' })).toBeDisabled();
