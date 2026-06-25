@@ -1,4 +1,5 @@
 import { test as base, expect } from '@playwright/test';
+import { trackProgramId } from '../support/program-tracker';
 
 const programsByTest = new Map<string, string[]>();
 
@@ -7,6 +8,7 @@ export function trackProgram(uuid: string): void {
   const list = programsByTest.get(key) ?? [];
   list.push(uuid);
   programsByTest.set(key, list);
+  trackProgramId(uuid);
 }
 
 export async function deleteProgram(uuid: string): Promise<void> {
