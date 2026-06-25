@@ -12,5 +12,5 @@
     "resolveJsonModule": true,
     "noEmit": true
   },
-  "include": ["tests", "support", "playwright.config.ts"]
+  "include": ["tests", "support", "pages", "fixtures", "playwright.config.ts"]
 }
