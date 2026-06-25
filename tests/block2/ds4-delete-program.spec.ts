@@ -5,7 +5,6 @@ import {
   createAndTrackProgram,
   deleteButton,
   dismissNextDialog,
-  login,
   openNewProgramDialog,
   programRow,
   uniqueProgramName,
@@ -14,10 +13,6 @@ import {
 } from './fixtures';
 
 test.beforeAll(assertDidaxisEnv);
-
-test.beforeEach(async ({ page }) => {
-  await login(page);
-});
 
 test.describe('Block 2 — DS-4 Delete program (browser confirm)', () => {
   test('TC-001 Program is removed after deletion is confirmed', async ({ page }) => {

@@ -2,7 +2,6 @@ import { expect, test } from '../../fixtures/cleanup.fixture';
 import {
   assertDidaxisEnv,
   createAndTrackProgram,
-  login,
   openEditProgramDialog,
   programRow,
   uniqueProgramName,
@@ -12,10 +11,6 @@ import {
 const MAX_PROGRAM_NAME_LENGTH = 100;
 
 test.beforeAll(assertDidaxisEnv);
-
-test.beforeEach(async ({ page }) => {
-  await login(page);
-});
 
 // Jira DS-2: https://legionqaschool.atlassian.net/browse/DS-2
 // Test plan: block2/DS-2/block2_output.md

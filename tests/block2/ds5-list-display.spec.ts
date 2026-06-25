@@ -2,7 +2,6 @@ import { expect, test, trackProgram } from '../../fixtures/cleanup.fixture';
 import {
   assertDidaxisEnv,
   createAndTrackProgram,
-  login,
   openNewProgramDialog,
   programRow,
   uniqueProgramName,
@@ -11,10 +10,6 @@ import {
 } from './fixtures';
 
 test.beforeAll(assertDidaxisEnv);
-
-test.beforeEach(async ({ page }) => {
-  await login(page);
-});
 
 test.describe('Block 2 — DS-5 Program list (filtering N/A on current UI)', () => {
   test('TC-001 Programs page shows list with name and description for existing programs', async ({

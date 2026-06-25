@@ -3,7 +3,6 @@ import {
   assertDidaxisEnv,
   clickCreateInDialog,
   createAndTrackProgram,
-  login,
   openNewProgramDialog,
   programRow,
   uniqueProgramName,
@@ -12,10 +11,6 @@ import {
 } from './fixtures';
 
 test.beforeAll(assertDidaxisEnv);
-
-test.beforeEach(async ({ page }) => {
-  await login(page);
-});
 
 test.describe('Block 2 — DS-1 Create New Academic Program', () => {
   test('TC-001 Program creation form is displayed from the Programs page', async ({ page }) => {
