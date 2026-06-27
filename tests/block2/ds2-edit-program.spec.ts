@@ -74,7 +74,10 @@ test.describe('Block 2 — DS-2 Program editing', () => {
     try {
       await page.route('**/*', (route) => {
         const req = route.request();
-        if (req.method() === 'POST' && req.url().toLowerCase().includes('program')) {
+        // Program edits are saved via PATCH /api/programs/<id> (create uses POST).
+        // Abort all mutating verbs so the save genuinely fails.
+        const isMutation = ['POST', 'PUT', 'PATCH'].includes(req.method());
+        if (isMutation && req.url().toLowerCase().includes('program')) {
           return route.abort('failed');
         }
         return route.continue();
@@ -128,26 +131,38 @@ test.describe('Block 2 — DS-2 Program editing', () => {
     await expect(reopen.getByLabel('Program Name')).toHaveValue(maxName);
   });
 
-  test('TC-202 Name above max length is rejected or limited', async ({ page }) => {
+  test('TC-202 Name above max length is rejected or limited', async ({ page, request }) => {
+    // Known demo bug: Didaxis does not enforce the documented 100-character
+    // maximum on the program name when editing. The Program Name field has no
+    // maxlength and the API performs no length validation, so a 101-char name is
+    // stored verbatim. Marked expected-to-fail to document the gap (TC-201
+    // confirms an exactly-100 name is accepted). Verified via the API because the
+    // UI does not render/match a 101-char name reliably.
+    test.fail(
+      true,
+      'Known demo bug — Didaxis does not enforce the 100-char program name max on edit; over-length names are stored.',
+    );
     const tail = String(Date.now());
-    const base = (`F${'w'.repeat(120)}${tail}`).slice(0, MAX_PROGRAM_NAME_LENGTH);
-    const tooLong = `${base}Z`;
-    const truncated = tooLong.slice(0, MAX_PROGRAM_NAME_LENGTH);
+    const tooLong = `${(`F${'w'.repeat(120)}${tail}`).slice(0, MAX_PROGRAM_NAME_LENGTH)}Z`;
+    expect(tooLong.length).toBe(MAX_PROGRAM_NAME_LENGTH + 1);
+
     const name = uniqueProgramName('OverEdit');
-    await createAndTrackProgram(page, name, 'd');
+    const uuid = await createAndTrackProgram(page, name, 'd');
     const dialog = await openEditProgramDialog(page, name);
     await dialog.getByLabel('Program Name').fill(tooLong);
     await dialog.getByRole('button', { name: 'Save' }).click();
-    await expect(programRow(page, tooLong)).toHaveCount(0);
-    if (await dialog.isVisible().catch(() => false)) {
-      await expect(dialog).toBeVisible();
-      await expect(programRow(page, name)).toBeVisible();
-      expect((await dialog.getByLabel('Program Name').inputValue()).length).toBeLessThanOrEqual(
-        MAX_PROGRAM_NAME_LENGTH,
-      );
-    } else {
-      await expect(programRow(page, name).or(programRow(page, truncated))).toBeVisible();
-    }
+    // Wait for the save to settle: the dialog closes when accepted, or stays open
+    // if the app were to reject it. Either way, continue to the API assertion.
+    await dialog.waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+
+    const baseUrl = (process.env.DIDAXIS_URL ?? '').replace(/\/$/, '');
+    const res = await request.get(`${baseUrl}/api/programs/${uuid}`, {
+      headers: { Authorization: `Bearer ${process.env.DIDAXIS_API_TOKEN}` },
+    });
+    const body = (await res.json()) as { data?: { name?: string } };
+    const storedName = body.data?.name ?? '';
+    // The stored name must respect the documented maximum length.
+    expect(storedName.length).toBeLessThanOrEqual(MAX_PROGRAM_NAME_LENGTH);
   });
 
   test('TC-203 Special characters are preserved', async ({ page }) => {
@@ -171,9 +186,12 @@ test.describe('Block 2 — DS-2 Program editing', () => {
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(dialog).toBeHidden({ timeout: 15_000 });
     await expect(programRow(page, core)).toBeVisible();
-    await expect(
-      page.locator('tbody tr').filter({ has: page.getByText(`  ${core}  `, { exact: true }) }),
-    ).toHaveCount(0);
+    // The stored name must be trimmed. getByText normalizes whitespace, so it
+    // can't detect surrounding spaces; reopen and assert the exact input value
+    // (toHaveValue compares the raw string, no whitespace normalization).
+    const reopenTrim = await openEditProgramDialog(page, core);
+    await expect(reopenTrim.getByLabel('Program Name')).toHaveValue(core);
+    await reopenTrim.getByRole('button', { name: 'Cancel' }).click();
 
     const spacesOnly = uniqueProgramName('SpacesOnly');
     await createAndTrackProgram(page, spacesOnly, 'd');
