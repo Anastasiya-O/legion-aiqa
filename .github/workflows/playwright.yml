@@ -9,6 +9,7 @@ jobs:
     name: Run Playwright tests
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    environment: dev1
     env:
       CI: true
       DIDAXIS_URL: ${{ secrets.DIDAXIS_URL }}
